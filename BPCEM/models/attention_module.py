@@ -1,11 +1,8 @@
-# from keras.layers import GlobalAveragePooling2D, GlobalMaxPooling2D, Reshape, Dense, multiply, Permute, Concatenate, Conv2D, Add, Activation, Lambda
+
 from keras.layers import *
 from keras import backend as K
 from keras.activations import sigmoid
 import tensorflow as tf
-# from keras.layers import Lambda
-# from keras.layers import Layer
-# from models.posatten import PAM
 import numpy as np
 
 
@@ -21,76 +18,6 @@ def attach_attention_module(net, attention_module):
         raise Exception("'{}' is not supported attention module!".format(attention_module))
 
     return net
-
-
-# class PAM_Module(Module):
-#     """ Position attention module"""
-#     #Ref from SAGAN
-#     def __init__(self, in_dim):
-#         super(PAM_Module, self).__init__()
-#         self.chanel_in = in_dim
-#
-#         self.query_conv = Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
-#         self.key_conv = Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
-#         self.value_conv = Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
-#         self.gamma = Parameter(torch.zeros(1))
-#
-#         self.softmax = Softmax(dim=-1)
-#     def forward(self, x):
-#         """
-#             inputs :
-#                 x : input feature maps( B X C X H X W)
-#             returns :
-#                 out : attention value + input feature
-#                 attention: B X (HxW) X (HxW)
-#         """
-#         m_batchsize, C, height, width = x.size()
-#         proj_query = self.query_conv(x).view(m_batchsize, -1, width*height).permute(0, 2, 1)
-#         proj_key = self.key_conv(x).view(m_batchsize, -1, width*height)
-#         energy = torch.bmm(proj_query, proj_key)
-#         attention = self.softmax(energy)
-#         proj_value = self.value_conv(x).view(m_batchsize, -1, width*height)
-#
-#         out = torch.bmm(proj_value, attention.permute(0, 2, 1))
-#         out = out.view(m_batchsize, C, height, width)
-#
-#         out = self.gamma*out + x
-#         return out
-
-""" Position attention module"""
-
-
-# Ref from SAGAN
-# def posattention(in_dim,input_feature):
-
-def posattention(input_feature):
-    """
-        inputs :
-            x : input feature maps( B X C X H X W)
-        returns :
-            out : attention value + input feature
-            attention: B X (HxW) X (HxW)
-    """
-    input_shape = input_feature.get_shape().as_list()
-    _, h, w, filters = input_shape
-    # print("filters",filters)
-
-    b = Conv2D(filters // 8, 1, use_bias=False, kernel_initializer='he_normal')(input_feature)
-    c = Conv2D(filters // 8, 1, use_bias=False, kernel_initializer='he_normal')(input_feature)
-    d = Conv2D(filters, 1, use_bias=False, kernel_initializer='he_normal')(input_feature)
-
-    vec_b = K.reshape(b, (-1, h * w, filters // 8))
-    vec_cT = tf.transpose(K.reshape(c, (-1, h * w, filters // 8)), (0, 2, 1))
-    bcT = K.batch_dot(vec_b, vec_cT)
-    softmax_bcT = Activation('softmax')(bcT)
-    vec_d = K.reshape(d, (-1, h * w, filters))
-    bcTd = K.batch_dot(softmax_bcT, vec_d)
-    bcTd = K.reshape(bcTd, (-1, h, w, filters))
-    se = se_block(input_feature)
-    out = bcTd + se
-    print(out.shape)
-    return out
-
 
 def W_AveragePooling2D(x):
     # print("xxxxxx",x.shape)
@@ -173,34 +100,6 @@ def se_block(input_feature, ratio=8):#8
     # print("after multiply se_feature.shape", se_feature.shape)
     return se_feature
 
-# def se_block(input_feature, ratio=8):  # 8
-#     """Contains the implementation of Squeeze-and-Excitation(SE) block.
-#     As described in https://arxiv.org/abs/1709.01507.
-#     """
-#     channel_axis = 1 if K.image_data_format() == "channels_first" else -1
-#     channel = input_feature._keras_shape[channel_axis]
-#     se_feature = GlobalAveragePooling2D()(input_feature)
-#     se_feature = Reshape((1, 1, channel))(se_feature)
-#     assert se_feature._keras_shape[1:] == (1, 1, channel)
-#     se_feature = Dense(channel // ratio,
-#                        activation='relu',
-#                        kernel_initializer='he_normal',
-#                        use_bias=True,
-#                        bias_initializer='zeros')(se_feature)
-#     assert se_feature._keras_shape[1:] == (1, 1, channel // ratio)
-#     se_feature = Dense(channel,
-#                        activation='sigmoid',
-#                        kernel_initializer='he_normal',
-#                        use_bias=True,
-#                        bias_initializer='zeros')(se_feature)
-#     assert se_feature._keras_shape[1:] == (1, 1, channel)
-#     if K.image_data_format() == 'channels_first':
-#         se_feature = Permute((3, 1, 2))(se_feature)
-#
-#     se_feature = multiply([input_feature, se_feature])
-#     print("after multiply se_feature.shape", se_feature.shape)
-#     return se_feature
-
 
 def cbam_block(cbam_feature, ratio=8):
     """Contains the implementation of Convolutional Block Attention Module(CBAM) block.
@@ -212,49 +111,6 @@ def cbam_block(cbam_feature, ratio=8):
     return cbam_feature
 
 
-# def channel_attention(input_feature, ratio=8):
-#     channel_axis = 1 if K.image_data_format() == "channels_first" else -1
-#     channel = input_feature._keras_shape[channel_axis]
-#
-#     shared_layer_one = Dense(channel // ratio,
-#                              activation='relu',
-#                              kernel_initializer='he_normal',
-#                              use_bias=True,
-#                              bias_initializer='zeros')
-#     shared_layer_two = Dense(channel,
-#                              kernel_initializer='he_normal',
-#                              use_bias=True,
-#                              bias_initializer='zeros')
-#
-#     avg_pool = W_AveragePooling2D(input_feature)
-#     avg_pool1 = H_AveragePooling2D(input_feature)
-#     avg_pool = Reshape((1, input_feature.shape[2], channel))(avg_pool)
-#     avg_pool1 = Reshape((input_feature.shape[1],1, channel))(avg_pool1)
-#     assert avg_pool._keras_shape[1:] == (1, input_feature.shape[2], channel)
-#     avg_pool = shared_layer_one(avg_pool)
-#     assert avg_pool1._keras_shape[1:] == (input_feature.shape[1],1, channel)
-#     avg_pool1 = shared_layer_one(avg_pool1)
-#     assert avg_pool._keras_shape[1:] == (1, input_feature.shape[2], channel // ratio)
-#     avg_pool = shared_layer_two(avg_pool)
-#     assert avg_pool1._keras_shape[1:] == (input_feature.shape[1],1, channel // ratio)
-#     avg_pool1 = shared_layer_two(avg_pool1)
-#     assert avg_pool._keras_shape[1:] == (1, input_feature.shape[2], channel)
-#
-#     max_pool = GlobalMaxPooling2D()(input_feature)
-#     max_pool = Reshape((1, 1, channel))(max_pool)
-#     assert max_pool._keras_shape[1:] == (1, 1, channel)
-#     max_pool = shared_layer_one(max_pool)
-#     assert max_pool._keras_shape[1:] == (1, 1, channel // ratio)
-#     max_pool = shared_layer_two(max_pool)
-#     assert max_pool._keras_shape[1:] == (1, 1, channel)
-#
-#     cbam_feature = Add()([avg_pool,avg_pool1, max_pool])
-#     cbam_feature = Activation('sigmoid')(cbam_feature)
-#
-#     if K.image_data_format() == "channels_first":
-#         cbam_feature = Permute((3, 1, 2))(cbam_feature)
-#
-#     return multiply([input_feature, cbam_feature])
 
 
 def channel_attention(input_feature, ratio=8):
